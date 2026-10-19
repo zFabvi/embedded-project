@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
 #include <string.h>
+#include <sys/_intsup.h>
 #include "../Inc/recruiting/conversions.h"
 /* USER CODE END Includes */
 
@@ -51,8 +52,11 @@
 
  uint16_t buffer_adc[2]; // buffer_adc is used to r/w POT (in 0) & NTC (in 1)
 
-
  volatile uint8_t cli_mode = 0; // volatile variable to manage the interrupt signal
+
+ char cli_buffer[10]; // characters sequence for command recognition 
+ uint8_t cli_index = 0; // index used to scroll positions while reading command
+ uint8_t rx_byte; // used to move a value in the buffer 
 
 /* USER CODE END PV */
 
@@ -133,22 +137,54 @@ int main(void)
       char msg_stream[100];
       format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg_stream);
 
-      // Transmitting message with a 500ms delay
+      // Transmitting message with a 100ms delay
       HAL_UART_Transmit(&huart2, (uint8_t*)msg_stream, strlen(msg_stream), 1000);
       HAL_Delay(100);
 
     }
     else{ // CLI
 
-      char msg_cli[] = " CLI MODE\r\n";
-      HAL_UART_Transmit(&huart2, (uint8_t*)msg_cli, strlen(msg_cli), 1000);
-      HAL_Delay(500);
+      if (HAL_UART_Receive(&huart2, &rx_byte, 1, 10) == HAL_OK) {
+        
+        HAL_UART_Transmit(&huart2, &rx_byte, 1, 10);
 
-    }
+        if (rx_byte != '\r' && rx_byte != '\n') {
+          
+          if (cli_index < 10) {
+            cli_buffer[cli_index] = rx_byte;
+            cli_index++;
+          }
+
+        }
+        else if (rx_byte == '\r' || rx_byte == '\n') {
+
+          cli_buffer[cli_index] = '\0';
+
+          if( strcmp(cli_buffer, "noflt") == 0){
+            char command_noflt[] = "\r\nnoflt exec\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)command_noflt, strlen(command_noflt), 100);
+          }
+          else if (strcmp(cli_buffer, "mvavg") == 0) {
+            char command_mvavg[] = "\r\nmvavg exec\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)command_mvavg, strlen(command_mvavg), 100);
+          }
+          else if (strcmp(cli_buffer, "noise") == 0) {
+            char command_rndns[] = "\r\nrndns exec\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)command_rndns, strlen(command_rndns), 100);
+          }
+          else if (cli_index > 0) {
+            char command_error[] = "\r\nUnknown command";
+            HAL_UART_Transmit(&huart2, (uint8_t*)command_error, strlen(command_error), 100);
+          }
+          cli_index = 0;
+          memset(cli_buffer, 0, sizeof(cli_buffer));
+        }
+      }
+    }    
   }
-  /* USER CODE END 3 */
 }
 
+/* USER CODE END 3 */
 /**
   * @brief System Clock Configuration
   * @retval None
