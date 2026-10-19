@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
 #include <string.h>
 #include "../Inc/recruiting/conversions.h"
 /* USER CODE END Includes */
@@ -49,6 +50,9 @@
 /* USER CODE BEGIN PV */
 
  uint16_t buffer_adc[2]; // buffer_adc is used to r/w POT (in 0) & NTC (in 1)
+
+
+ volatile uint8_t cli_mode = 0; // volatile variable to manage the interrupt signal
 
 /* USER CODE END PV */
 
@@ -115,22 +119,32 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if(cli_mode == 0) { // STREAMING
 
-    // Every cycle the buffer is gonna extract the POT & NTC values 
-    uint16_t raw_pot = buffer_adc[0];
-    uint16_t raw_ntc = buffer_adc[1];
+      // Every cycle the buffer is gonna extract the POT & NTC values 
+      uint16_t raw_pot = buffer_adc[0];
+      uint16_t raw_ntc = buffer_adc[1];
 
-    // Conversions using included 'conversions.c'
-    float pot_v = calc_pot_volts(raw_pot);
-    float temp_c = calc_ntc_temp(raw_ntc);
+      // Conversions using included 'conversions.c'
+      float pot_v = calc_pot_volts(raw_pot);
+      float temp_c = calc_ntc_temp(raw_ntc);
 
-    // Formatting sensor data to prevent memory issues caused by float values
-    char msg[100];
-    format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg);
+      // Formatting sensor data to prevent memory issues caused by float values
+      char msg_stream[100];
+      format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg_stream);
 
-    // Transmitting message with a 500ms delay
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 1000);
-    HAL_Delay(500);
+      // Transmitting message with a 500ms delay
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg_stream, strlen(msg_stream), 1000);
+      HAL_Delay(100);
+
+    }
+    else{ // CLI
+
+      char msg_cli[] = " CLI MODE\r\n";
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg_cli, strlen(msg_cli), 1000);
+      HAL_Delay(500);
+
+    }
   }
   /* USER CODE END 3 */
 }
@@ -174,6 +188,16 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
+{
+  // currently the User Button pin is PC13
+  if(GPIO_Pin == GPIO_PIN_13)
+  {
+    cli_mode = !cli_mode;
+  }
+}
+
 /* USER CODE END 4 */
 
 /**
