@@ -18,12 +18,15 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "dma.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include "../Inc/recruiting/conversions.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +47,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+ uint16_t buffer_adc[2]; // buffer_adc is used to r/w POT (in 0) & NTC (in 1)
 
 /* USER CODE END PV */
 
@@ -87,8 +92,19 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
+
   /* USER CODE BEGIN 2 */
+
+
+  HAL_ADCEx_Calibration_Start(&hadc1); // ADC calibration should give better results
+
+  // Enabling ADC and storing data in buffer_adc (2 conversions)
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2);
+
+
 
   /* USER CODE END 2 */
 
@@ -99,6 +115,22 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    // Every cycle the buffer is gonna extract the POT & NTC values 
+    uint16_t raw_pot = buffer_adc[0];
+    uint16_t raw_ntc = buffer_adc[1];
+
+    // Conversions using included 'conversions.c'
+    float pot_v = calc_pot_volts(raw_pot);
+    float temp_c = calc_ntc_temp(raw_ntc);
+
+    // Formatting sensor data to prevent memory issues caused by float values
+    char msg[100];
+    format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg);
+
+    // Transmitting message with a 500ms delay
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 1000);
+    HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -117,8 +149,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -128,7 +162,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
@@ -140,7 +174,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /**
