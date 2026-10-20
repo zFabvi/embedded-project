@@ -29,6 +29,7 @@
 #include <string.h>
 #include <sys/_intsup.h>
 #include "../Inc/recruiting/conversions.h"
+#include "../Inc/recruiting/filters.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +58,9 @@
  char cli_buffer[10]; // characters sequence for command recognition 
  uint8_t cli_index = 0; // index used to scroll positions while reading command
  uint8_t rx_byte; // used to move a value in the buffer 
+
+ volatile uint8_t active_mode = 0; // used to manage modes messages
+ volatile uint8_t active_filter = 0; // used to manage filters
 
 /* USER CODE END PV */
 
@@ -125,9 +129,23 @@ int main(void)
     /* USER CODE BEGIN 3 */
     if(cli_mode == 0) { // STREAMING
 
+      if(active_mode == 0) {
+      char start_stream_message[] = "\r\n[---------------------- STREAMING MODE ----------------------]\r\n\n";
+      HAL_UART_Transmit(&huart2, (uint8_t*)start_stream_message,
+                        strlen(start_stream_message), 1000);
+      HAL_Delay(500);
+      active_mode = 1;
+      }
+
       // Every cycle the buffer is gonna extract the POT & NTC values 
       uint16_t raw_pot = buffer_adc[0];
       uint16_t raw_ntc = buffer_adc[1];
+
+      if(active_filter == 1) {
+        filter_apply_mvavg(&raw_pot, &raw_ntc);
+      } else if (active_filter == 2) {
+        filter_apply_noise(&raw_pot, &raw_ntc);
+      }
 
       // Conversions using included 'conversions.c'
       float pot_v = calc_pot_volts(raw_pot);
@@ -143,6 +161,19 @@ int main(void)
 
     }
     else{ // CLI
+
+      if(active_mode == 0) {
+      char start_stream_message[] = 
+      "\r\n"
+      "[----------------------- CLI MODE -----------------------]\r\n\n"
+      "COMMANDS: 'noflt' to remove filters,                        \r\n"
+      "          'mvavg' to apply moving average (150 elements),   \r\n"
+      "          'noise' to apply random spike noise (75% prob)  \r\n\n";
+      HAL_UART_Transmit(&huart2, (uint8_t*)start_stream_message,
+                        strlen(start_stream_message), 1000);
+      HAL_Delay(500);
+      active_mode = 1;
+      }
 
       if (HAL_UART_Receive(&huart2, &rx_byte, 1, 10) == HAL_OK) {
         
@@ -160,21 +191,25 @@ int main(void)
 
           cli_buffer[cli_index] = '\0';
 
-          if( strcmp(cli_buffer, "noflt") == 0){
-            char command_noflt[] = "\r\nnoflt exec\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)command_noflt, strlen(command_noflt), 100);
+          if(strcmp(cli_buffer, "noflt") == 0){
+            active_filter = 0;
+            char noflt[] = "\r\nFILTERS REMOVED (RAW MODE)\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)noflt, strlen(noflt), 100);
           }
           else if (strcmp(cli_buffer, "mvavg") == 0) {
-            char command_mvavg[] = "\r\nmvavg exec\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)command_mvavg, strlen(command_mvavg), 100);
+            active_filter = 1;
+            filter_reset_mvavg();
+            char mvavg[] = "\r\nMOVING AVERAGE FILTER ACTIVATED\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)mvavg, strlen(mvavg), 100);
           }
           else if (strcmp(cli_buffer, "noise") == 0) {
-            char command_rndns[] = "\r\nrndns exec\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)command_rndns, strlen(command_rndns), 100);
+            active_filter = 2;
+            char noise[] = "\r\nRANDOM SPIKE NOISE ACTIVATED\r\n";
+            HAL_UART_Transmit(&huart2, (uint8_t*)noise, strlen(noise), 100);
           }
           else if (cli_index > 0) {
-            char command_error[] = "\r\nUnknown command";
-            HAL_UART_Transmit(&huart2, (uint8_t*)command_error, strlen(command_error), 100);
+            char error[] = "\r\nUnknown command";
+            HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error), 100);
           }
           cli_index = 0;
           memset(cli_buffer, 0, sizeof(cli_buffer));
@@ -231,6 +266,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == GPIO_PIN_13)
   {
     cli_mode = !cli_mode;
+    active_mode = !active_mode;
   }
 }
 
