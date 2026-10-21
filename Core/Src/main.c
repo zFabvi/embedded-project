@@ -51,16 +51,16 @@
 
 /* USER CODE BEGIN PV */
 
- uint16_t buffer_adc[2]; // buffer_adc is used to r/w POT (in 0) & NTC (in 1)
+ uint16_t buffer_adc[2]; /*!< DMA buffer for ADC readings: POT at index 0, NTC at index 1 */
 
- volatile uint8_t cli_mode = 0; // volatile variable to manage the interrupt signal
+ volatile uint8_t cli_mode = 0; /*!< Flag to manage UART interrupt signaling for CLI mode */
 
- char cli_buffer[10]; // characters sequence for command recognition 
- uint8_t cli_index = 0; // index used to scroll positions while reading command
- uint8_t rx_byte; // used to move a value in the buffer 
+ char cli_buffer[10]; /*!< Buffer to store incoming UART characters for command recognition */ 
+ uint8_t cli_index = 0; /*!< Current write index for the CLI buffer */
+ uint8_t rx_byte; /*!< Temporary storage for the single byte received via UART interrupt */
 
- volatile uint8_t active_mode = 0; // used to manage modes messages
- volatile uint8_t active_filter = 0; // used to manage filters
+ volatile uint8_t active_mode = 0; /*!< Flag to control current operational mode and message output */
+ volatile uint8_t active_filter = 0; /*!< Flag to identify the currently active data filter */
 
 /* USER CODE END PV */
 
@@ -110,13 +110,9 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
+  HAL_ADCEx_Calibration_Start(&hadc1); /*!< Calibrate the ADC before starting to ensure accurate analog readings */
 
-  HAL_ADCEx_Calibration_Start(&hadc1); // ADC calibration should give better results
-
-  // Enabling ADC and storing data in buffer_adc (2 conversions)
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2);
-
-
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2); /*!< Start ADC conversions and transfer data to buffer_adc via DMA (2 channels) */
 
   /* USER CODE END 2 */
 
@@ -127,7 +123,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if(cli_mode == 0) { // STREAMING
+    if(cli_mode == 0) { /*!< STREAMING MODE */
 
       if(active_mode == 0) {
       char start_stream_message[] = "\r\n[---------------------- STREAMING MODE ----------------------]\r\n\n";
@@ -137,7 +133,6 @@ int main(void)
       active_mode = 1;
       }
 
-      // Every cycle the buffer is gonna extract the POT & NTC values 
       uint16_t raw_pot = buffer_adc[0];
       uint16_t raw_ntc = buffer_adc[1];
 
@@ -147,20 +142,17 @@ int main(void)
         filter_apply_noise(&raw_pot, &raw_ntc);
       }
 
-      // Conversions using included 'conversions.c'
+      /*!< Conversions using included 'conversions.c' */
       float pot_v = calc_pot_volts(raw_pot);
       float temp_c = calc_ntc_temp(raw_ntc);
-
-      // Formatting sensor data to prevent memory issues caused by float values
-      char msg_stream[100];
+      
+      char msg_stream[100]; /*!< Formatting sensor data to prevent memory issues caused by float values */
       format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg_stream);
 
-      // Transmitting message with a 100ms delay
-      HAL_UART_Transmit(&huart2, (uint8_t*)msg_stream, strlen(msg_stream), 1000);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg_stream, strlen(msg_stream), 1000); /*!< Transmitting message with a 100ms delay */
       HAL_Delay(100);
-
     }
-    else{ // CLI
+    else{ /*!< CLI MODE */
 
       if(active_mode == 0) {
       char start_stream_message[] = 
@@ -169,8 +161,10 @@ int main(void)
       "COMMANDS: 'noflt' to remove filters,                        \r\n"
       "          'mvavg' to apply moving average (150 elements),   \r\n"
       "          'noise' to apply random spike noise (75% prob)  \r\n\n";
+
       HAL_UART_Transmit(&huart2, (uint8_t*)start_stream_message,
                         strlen(start_stream_message), 1000);
+
       HAL_Delay(500);
       active_mode = 1;
       }
@@ -180,12 +174,10 @@ int main(void)
         HAL_UART_Transmit(&huart2, &rx_byte, 1, 10);
 
         if (rx_byte != '\r' && rx_byte != '\n') {
-          
           if (cli_index < 10) {
             cli_buffer[cli_index] = rx_byte;
             cli_index++;
           }
-
         }
         else if (rx_byte == '\r' || rx_byte == '\n') {
 
@@ -211,6 +203,7 @@ int main(void)
             char error[] = "\r\nUnknown command";
             HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error), 100);
           }
+
           cli_index = 0;
           memset(cli_buffer, 0, sizeof(cli_buffer));
         }
@@ -260,9 +253,18 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/*!
+ * \brief EXTI line detection callback.
+ * 
+ * This function is triggered by the hardware whenever a falling edge 
+ * interrupt occurs on a configured GPIO pin. It verifies if the interrupt 
+ * source is the User Button (PC13) and toggles the operational state 
+ * between Streaming Mode and CLI Mode.
+ * 
+ * \param GPIO_Pin Specifies the EXTI line that triggered the interrupt.
+ */
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
-  // currently the User Button pin is PC13
   if(GPIO_Pin == GPIO_PIN_13)
   {
     cli_mode = !cli_mode;
