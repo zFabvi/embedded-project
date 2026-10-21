@@ -1,12 +1,14 @@
 #include "../../Inc/recruiting/filters.h"
 #include <stdint.h>
-#include <stdlib.h>
 
 #define MVAVG_SIZE 150
 
 // gathering the last 150 values
 static uint16_t pot_history[MVAVG_SIZE] = {0};
 static uint16_t ntc_history[MVAVG_SIZE] = {0};
+
+// xorshift32 random seed
+static uint32_t rnd_state = 314159265;
 
 // we need to store the sum of the values
 // |--> where the max value is 4095 * 150
@@ -45,11 +47,18 @@ void filter_apply_mvavg(uint16_t* pot_val, uint16_t* ntc_val) {
     *ntc_val = (uint16_t)(ntc_sum / mvavg_filled);
 }
 
+uint32_t xorshift32(void) {
+    rnd_state ^= rnd_state << 13;
+    rnd_state ^= rnd_state >> 17;
+    rnd_state ^= rnd_state << 5;
+    return rnd_state;
+}
+
 void filter_apply_noise(uint16_t* pot_val, uint16_t* ntc_val) {
     int spike[2] = {0, 0};
-    if ((rand() % 100) < 75) { // 75%
-        spike[0] = rand() % 1000;
-        spike[1] = rand() % 750; 
+    if ((xorshift32() % 100) < 75) { // 75%
+        spike[0] = xorshift32() % 1000;
+        spike[1] = xorshift32() % 750; 
     }
 
     int noisy_pot = *pot_val + spike[0];
