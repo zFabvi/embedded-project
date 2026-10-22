@@ -20,6 +20,7 @@
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -107,7 +108,8 @@ int main(void)
   MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
-
+  MX_TIM1_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_ADCEx_Calibration_Start(&hadc1); /*!< Calibrate the ADC before starting to ensure accurate analog readings */
@@ -212,7 +214,9 @@ int main(void)
   }
 }
 
-/* USER CODE END 3 */
+  /* USER CODE END 3 */
+}
+
 /**
   * @brief System Clock Configuration
   * @retval None
