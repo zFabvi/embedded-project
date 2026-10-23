@@ -1,7 +1,7 @@
-#include "../../Inc/recruiting/conversions.h"
+#include "conversions-api.h"
+#include "conversions.h"
 #include <stdio.h>
 #include <math.h>
-
 
 /*!
  * \brief Converts the raw ADC value to voltage for the potentiometer.

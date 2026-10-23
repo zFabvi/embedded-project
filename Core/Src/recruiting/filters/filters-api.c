@@ -1,7 +1,6 @@
-#include "../../Inc/recruiting/filters.h"
+#include "filters-api.h";
+#include "filters.h";
 #include <stdint.h>
-
-#define MVAVG_SIZE 150 /*!< Size of the moving average window */
 
 static uint16_t pot_history[MVAVG_SIZE] = {0}; /*!< Circular buffer gathering the last 150 POT values */
 static uint16_t ntc_history[MVAVG_SIZE] = {0}; /*!< Circular buffer gathering the last 150 NTC values */

@@ -26,16 +26,27 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 #include <stdint.h>
 #include <string.h>
 #include <sys/_intsup.h>
-#include "../Inc/recruiting/conversions.h"
-#include "../Inc/recruiting/filters.h"
+
+#include "conversions-api.h"
+#include "filters-api.h"
+#include "eagletrt-fsm-api.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum {
+    STATE_POST,
+    STATE_WAITING,
+    STATE_LISTENING,
+    STATE_PAUSED,
+    STATE_WARNING,
+    STATE_FATAL
+} SystemState_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -215,7 +226,6 @@ int main(void)
 }
 
   /* USER CODE END 3 */
-}
 
 /**
   * @brief System Clock Configuration

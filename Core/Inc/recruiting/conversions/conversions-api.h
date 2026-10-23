@@ -1,5 +1,5 @@
-#ifndef CONVERSIONS_H
-#define CONVERSIONS_H
+#ifndef CONVERSIONS_API_H
+#define CONVERSIONS_API_H
 
 #include <stdint.h>
 

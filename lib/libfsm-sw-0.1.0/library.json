@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "libfsm-sw",
+  "version": "0.1.0",
+  "description": "FSM library for embedded purposes!",
+  "keywords": [
+    "FSM",
+    "Finite State Machine"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eagletrt/libfsm-sw"
+  },
+  "authors": [
+    {
+      "name": "Alessandro Giustina",
+      "email": "giustinalessandro@gmail.com",
+      "maintainer": true
+    },
+    {
+      "name": "Alessandro Bridi",
+      "email": "ale.bridi15@gmail.com"
+    }
+  ],
+  "license": "AGPL-3.0-only",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": [
+    "include/eagletrt-eagletrt-fsm-api.h",
+    "include/eagletrt-fsm-api.h"
+  ],
+  "examples": [],
+  "export": {
+    "include": [
+      "src/**",
+      "include/**"
+    ]
+  }
+}
