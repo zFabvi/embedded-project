@@ -33,20 +33,13 @@
 
 #include "conversions-api.h"
 #include "filters-api.h"
-#include "eagletrt-fsm-api.h"
+#include "fsm-api.h"
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef enum {
-    STATE_POST,
-    STATE_WAITING,
-    STATE_LISTENING,
-    STATE_PAUSED,
-    STATE_WARNING,
-    STATE_FATAL
-} SystemState_t;
+struct SystemContext sys_ctx = {0};
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -127,6 +120,33 @@ int main(void)
 
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2); /*!< Start ADC conversions and transfer data to buffer_adc via DMA (2 channels) */
 
+  if (system_fsm_init() != FSM_RC_OK) {
+      Error_Handler();
+  }
+
+  if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) {
+      sys_ctx.error_msg = "HAL Error: ADC Calibration failed";
+      system_fsm_transition_to(STATE_FATAL);
+  }
+
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2) != HAL_OK) {
+      sys_ctx.error_msg = "HAL Error: ADC DMA start failed";
+      system_fsm_transition_to(STATE_FATAL);
+  }
+
+  if (HAL_TIM_Base_Start_IT(&htim14) != HAL_OK) {
+      sys_ctx.error_msg = "HAL Error: TIM14 IT start failed";
+      system_fsm_transition_to(STATE_FATAL);
+  }
+
+  if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK ||
+      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2) != HAL_OK) {
+      sys_ctx.error_msg = "HAL Error: TIM1 PWM start failed";
+      system_fsm_transition_to(STATE_FATAL);
+  }
+
+  HAL_Delay(10);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -136,6 +156,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    system_fsm_run(&sys_ctx);
+
     if(cli_mode == 0) { /*!< STREAMING MODE */
 
       if(active_mode == 0) {
@@ -267,22 +290,19 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-/*!
- * \brief EXTI line detection callback.
- * 
- * This function is triggered by the hardware whenever a falling edge 
- * interrupt occurs on a configured GPIO pin. It verifies if the interrupt 
- * source is the User Button (PC13) and toggles the operational state 
- * between Streaming Mode and CLI Mode.
- * 
- * \param GPIO_Pin Specifies the EXTI line that triggered the interrupt.
- */
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
-  if(GPIO_Pin == GPIO_PIN_13)
+  if (GPIO_Pin == GPIO_PIN_13)
   {
-    cli_mode = !cli_mode;
-    active_mode = !active_mode;
+    sys_ctx.btn_pressed = 1;
+  }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM14)
+  {
+    sys_ctx.tick_ms++;
   }
 }
 

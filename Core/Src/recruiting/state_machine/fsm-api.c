@@ -85,7 +85,25 @@ static const struct State system_states[STATE_COUNT] = {
 };
 
 void state_post_fn(void *data) {
-    (void)data;
+    struct SystemContext *ctx = (struct SystemContext *)data;
+    if (ctx == NULL || ctx->adc_buffer == NULL) {
+        return;
+    }
+
+    uint16_t raw_pot = ctx->adc_buffer[0];
+    uint16_t raw_ntc = ctx->adc_buffer[1];
+
+    /*!< Check if potentiometer or NTC thermistor is disconnected (0) or shorted (>= 4095)
+     PS. This same check was implemented in filters-api.c to avoid it most of the times */
+    if (raw_pot == 0 || raw_pot >= 4095) {
+        ctx->error_msg = "POST failed: Potentiometer out of range (disconnected or shorted)";
+        system_fsm_transition_to(STATE_FATAL);
+    } else if (raw_ntc == 0 || raw_ntc >= 4095) {
+        ctx->error_msg = "POST failed: NTC thermistor out of range (disconnected or shorted)";
+        system_fsm_transition_to(STATE_FATAL);
+    } else {
+        system_fsm_transition_to(STATE_WAITING);
+    }
 }
 
 void state_waiting_fn(void *data) {
