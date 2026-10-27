@@ -1,6 +1,43 @@
 #ifndef FSM_H
 #define FSM_H
 
+#include <stdint.h>
+
+#define FSM_DIFF_THRESHOLD 500U  /*!< Raw ADC threshold (for Listening State) */
+#define FSM_PWM_MAX_DUTY   1000U /*!< Maximum PWM compare value */
+
+/*! \brief Timing constants in milliseconds. */
+#define FSM_LISTENING_TX_PERIOD_MS 100U
+#define FSM_LISTENING_WARN_TIME_MS 5000U
+#define FSM_WARNING_TX_PERIOD_MS   200U
+#define FSM_WARNING_BTN_HOLD_MS    2000U
+#define FSM_WARNING_FATAL_TIME_MS  10000U
+#define FSM_FATAL_TX_PERIOD_MS     100U
+
+/*!
+ * \brief Transition action executed when entering STATE_WAITING or STATE_PAUSED.
+ * \param data Pointer to the SystemContext structure.
+ */
+void transition_to_cli_state(void *data);
+
+/*!
+ * \brief Transition action executed when entering STATE_LISTENING.
+ * \param data Pointer to the SystemContext structure.
+ */
+void transition_to_listening(void *data);
+
+/*!
+ * \brief Transition action executed when entering STATE_WARNING.
+ * \param data Pointer to the SystemContext structure.
+ */
+void transition_to_warning(void *data);
+
+/*!
+ * \brief Transition action executed when entering STATE_FATAL.
+ * \param data Pointer to the SystemContext structure.
+ */
+void transition_to_fatal(void *data);
+
 /*!
  * \brief Routine for the POST (Power-On Self Test) state.
  * 

@@ -39,7 +39,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-struct SystemContext sys_ctx = {0};
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -58,14 +58,15 @@ struct SystemContext sys_ctx = {0};
 
  uint16_t buffer_adc[2]; /*!< DMA buffer for ADC readings: POT at index 0, NTC at index 1 */
 
- volatile uint8_t cli_mode = 0; /*!< Flag to manage UART interrupt signaling for CLI mode */
-
- char cli_buffer[10]; /*!< Buffer to store incoming UART characters for command recognition */ 
- uint8_t cli_index = 0; /*!< Current write index for the CLI buffer */
- uint8_t rx_byte; /*!< Temporary storage for the single byte received via UART interrupt */
-
- volatile uint8_t active_mode = 0; /*!< Flag to control current operational mode and message output */
- volatile uint8_t active_filter = 0; /*!< Flag to identify the currently active data filter */
+ struct SystemContext sys_ctx = {
+    .adc_buffer = buffer_adc,
+    .active_filter = 0,
+    .tick_ms = 0,
+    .btn_pressed = 0,
+    .cli_buffer = {0},
+    .cli_index = 0,
+    .error_msg = "Unknown error"
+ };
 
 /* USER CODE END PV */
 
@@ -115,11 +116,6 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
-
-  HAL_ADCEx_Calibration_Start(&hadc1); /*!< Calibrate the ADC before starting to ensure accurate analog readings */
-
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer_adc, 2); /*!< Start ADC conversions and transfer data to buffer_adc via DMA (2 channels) */
-
   if (system_fsm_init() != FSM_RC_OK) {
       Error_Handler();
   }
@@ -156,95 +152,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
     system_fsm_run(&sys_ctx);
-
-    if(cli_mode == 0) { /*!< STREAMING MODE */
-
-      if(active_mode == 0) {
-      char start_stream_message[] = "\r\n[---------------------- STREAMING MODE ----------------------]\r\n\n";
-      HAL_UART_Transmit(&huart2, (uint8_t*)start_stream_message,
-                        strlen(start_stream_message), 1000);
-      HAL_Delay(500);
-      active_mode = 1;
-      }
-
-      uint16_t raw_pot = buffer_adc[0];
-      uint16_t raw_ntc = buffer_adc[1];
-
-      if(active_filter == 1) {
-        filter_apply_mvavg(&raw_pot, &raw_ntc);
-      } else if (active_filter == 2) {
-        filter_apply_noise(&raw_pot, &raw_ntc);
-      }
-
-      /*!< Conversions using included 'conversions.c' */
-      float pot_v = calc_pot_volts(raw_pot);
-      float temp_c = calc_ntc_temp(raw_ntc);
-      
-      char msg_stream[100]; /*!< Formatting sensor data to prevent memory issues caused by float values */
-      format_sensor_data(raw_pot, pot_v, raw_ntc, temp_c, msg_stream);
-
-      HAL_UART_Transmit(&huart2, (uint8_t*)msg_stream, strlen(msg_stream), 1000); /*!< Transmitting message with a 100ms delay */
-      HAL_Delay(100);
-    }
-    else{ /*!< CLI MODE */
-
-      if(active_mode == 0) {
-      char start_stream_message[] = 
-      "\r\n"
-      "[----------------------- CLI MODE -----------------------]\r\n\n"
-      "COMMANDS: 'noflt' to remove filters,                        \r\n"
-      "          'mvavg' to apply moving average (150 elements),   \r\n"
-      "          'noise' to apply random spike noise (75% prob)  \r\n\n";
-
-      HAL_UART_Transmit(&huart2, (uint8_t*)start_stream_message,
-                        strlen(start_stream_message), 1000);
-
-      HAL_Delay(500);
-      active_mode = 1;
-      }
-
-      if (HAL_UART_Receive(&huart2, &rx_byte, 1, 10) == HAL_OK) {
-        
-        HAL_UART_Transmit(&huart2, &rx_byte, 1, 10);
-
-        if (rx_byte != '\r' && rx_byte != '\n') {
-          if (cli_index < 10) {
-            cli_buffer[cli_index] = rx_byte;
-            cli_index++;
-          }
-        }
-        else if (rx_byte == '\r' || rx_byte == '\n') {
-
-          cli_buffer[cli_index] = '\0';
-
-          if(strcmp(cli_buffer, "noflt") == 0){
-            active_filter = 0;
-            char noflt[] = "\r\nFILTERS REMOVED (RAW MODE)\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)noflt, strlen(noflt), 100);
-          }
-          else if (strcmp(cli_buffer, "mvavg") == 0) {
-            active_filter = 1;
-            filter_reset_mvavg();
-            char mvavg[] = "\r\nMOVING AVERAGE FILTER ACTIVATED\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)mvavg, strlen(mvavg), 100);
-          }
-          else if (strcmp(cli_buffer, "noise") == 0) {
-            active_filter = 2;
-            char noise[] = "\r\nRANDOM SPIKE NOISE ACTIVATED\r\n";
-            HAL_UART_Transmit(&huart2, (uint8_t*)noise, strlen(noise), 100);
-          }
-          else if (cli_index > 0) {
-            char error[] = "\r\nUnknown command";
-            HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error), 100);
-          }
-
-          cli_index = 0;
-          memset(cli_buffer, 0, sizeof(cli_buffer));
-        }
-      }
-    }    
   }
 }
 
