@@ -1,6 +1,7 @@
-#include "filters-api.h";
-#include "filters.h";
+#include "filters-api.h"
+#include "filters.h"
 #include <stdint.h>
+#include <string.h>
 
 static uint16_t pot_history[MVAVG_SIZE] = {0}; /*!< Circular buffer gathering the last 150 POT values */
 static uint16_t ntc_history[MVAVG_SIZE] = {0}; /*!< Circular buffer gathering the last 150 NTC values */
@@ -30,6 +31,8 @@ void filter_reset_mvavg(void) {
     ntc_sum = 0;
     mvavg_index = 0;
     mvavg_filled = 0;
+    memset(pot_history, 0, sizeof(pot_history));
+    memset(ntc_history, 0, sizeof(ntc_history));
 }
 
 /*!
@@ -43,8 +46,6 @@ void filter_reset_mvavg(void) {
  * \param ntc_val Pointer to the current NTC thermistor value.
  */
 void filter_apply_mvavg(uint16_t* pot_val, uint16_t* ntc_val) {
-    pot_sum -= pot_history[mvavg_index];
-    ntc_sum -= ntc_history[mvavg_index];
 
     pot_sum -= pot_history[mvavg_index];
     ntc_sum -= ntc_history[mvavg_index];
