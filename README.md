@@ -88,14 +88,28 @@ Here is how each state operates:
 * **`Warning`:** Shuts off both LEDs (`update_leds_pwm(0, 0)`), keeps checking the ADC buffer for physical sensor disconnections, and prints `WARNING` over serial every 200ms. To recover, the user must hold down the User Button (`PC13`, active-low) for at least 2000ms continuously (checked via `HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET`), which resets the state back to `Waiting`. If the board remains in `Warning` for 10 seconds (10000ms), it transitions to `Fatal`.
 * **`Fatal`:**  Any unexpected HAL return code (`!= HAL_OK` on UART, ADC, DMA, or Timers), POST failure, runtime sensor disconnect, or unacknowledged `Warning` lands here. The External LED is turned off, the Board LED flashes with a 40ms period (20ms ON, 20ms OFF), and the exact fault stored in `ctx->error_msg` is printed every 100ms (`ERROR: <reason>`). Pressing the User Button calls `NVIC_SystemReset()` to reboot the microcontroller.
 
+---
 
+## Step N. 3
 
+To test the core logic on my pc I configured a `native` environment in `platformio.ini` using the `Unity` framework.
 
+### Mockups
 
+`fsm-api.c` includes STM32 HAL headers (`tim.h` and `usart.h`) to control the PWM channels, read the User Button, and transmit over UART2.
+Instead of cluttering `fsm-api.c` with `#ifdef UNIT_TEST` preprocessor blocks, I kept the production source files untouched and created mock headers inside `test/mocks/` (`tim.h` and `usart.h`).
+I used the GCC `-iquote test/mocks` build flag in `[env:native]`, which takes precedence over `-I` paths for quoted `#include "..."` directives. I also used `build_src_filter` to compile only the three custom modules (`conversions`, `filters`, `state_machine`) while ignoring CubeMX startup files.
 
+### Modular Test Suites
 
+I split the tests into three dedicated folders inside `test/`:
 
+* **`test_conversions` (`test/test_conversions/test_conversions.c`):** Verifies `calc_pot_volts()` at boundary and mid-scale ADC readings (`0`, `2048`, `4095`), checks `calc_ntc_temp()` nominal Beta equation output at 25°C (`2048`) as well as fault handling (`0` and `4095` returning `0.0f`), and validates the exact string output of `format_sensor_data()`.
+* **`test_filters` (`test/test_filters/test_filters.c`):** Tests `filter_apply_mvavg()` across samples to verify the rolling sum math and buffer reset (`filter_reset_mvavg()`), and runs multiple iterations of `filter_apply_noise()` near the upper ADC boundary (`4090`) to confirm that positive spikes properly saturate at `4095` without overflowing.
+* **`test_fsm` (`test/test_fsm/test_fsm.c`):** Tests state transitions by feeding a local `SystemContext` struct into `system_fsm_run()`:
+  * Verifies `STATE_POST -> STATE_WAITING` when sensor readings are within valid bounds.
+  * Verifies `STATE_POST -> STATE_FATAL` when a sensor reads `0` (disconnected).
+  * Simulates button interrupts (`btn_pressed = 1`) to test `STATE_WAITING -> STATE_LISTENING -> STATE_PAUSED`.
+  * Simulates a high raw difference (`NTC - POT > 500`) while advancing `tick_ms` by `5000ms` to verify the automatic timeout transition from `STATE_LISTENING` to `STATE_WARNING`.
 
-
-
-
+All suites can be executed directly from the terminal with `pio test -e native`.
