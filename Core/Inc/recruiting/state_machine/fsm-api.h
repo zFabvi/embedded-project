@@ -26,7 +26,7 @@ struct SystemContext {
     uint8_t active_filter;        /*!< Active filter ID: 0 = none, 1 = mvavg, 2 = noise */
     volatile uint32_t tick_ms;    /*!< Millisecond counter incremented by TIM14 interrupt */
     volatile uint8_t btn_pressed; /*!< Flag set on User Button falling edge interrupt */
-    char cli_buffer[10];          /*!< Buffer for incoming UART CLI commands */
+    char cli_buffer[32];          /*!< Buffer for incoming UART CLI commands */
     uint8_t cli_index;            /*!< Current write index for cli_buffer */
     const char *error_msg;        /*!< Description of the last error for STATE_FATAL */
 };

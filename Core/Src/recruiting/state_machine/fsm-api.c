@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "tim.h"
 #include "usart.h"
@@ -19,6 +20,7 @@ static uint32_t threshold_start_tick = 0;
 static uint8_t  threshold_active = 0;
 static uint32_t btn_hold_start_tick = 0;
 static uint8_t  btn_holding = 0;
+static uint16_t warn_diff_threshold = FSM_DIFF_THRESHOLD;
 
 /*!
  * \brief Sets the PWM duty cycle on TIM1 channels.
@@ -94,6 +96,16 @@ static void process_cli(struct SystemContext *ctx) {
             } else if (strcmp(ctx->cli_buffer, "run") == 0) {
                 uart_send_checked(ctx, "\r\nSTARTING LISTENING MODE...\r\n");
                 system_fsm_transition_to(STATE_LISTENING);
+            } else if (strncmp(ctx->cli_buffer, "thr ", 4) == 0) {
+                int val = atoi(&ctx->cli_buffer[4]);
+                if (val > 0 && val < 4095) {
+                    warn_diff_threshold = (uint16_t)val;
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "\r\nWARNING THRESHOLD SET TO %u\r\n", warn_diff_threshold);
+                    uart_send_checked(ctx, msg);
+                } else {
+                    uart_send_checked(ctx, "\r\nInvalid threshold (use 1..4094)\r\n");
+                }
             } else if (ctx->cli_index > 0) {
                 uart_send_checked(ctx, "\r\nUnknown command\r\n");
             }
@@ -121,6 +133,7 @@ void transition_to_cli_state(void *data) {
         "COMMANDS: 'noflt' to remove filters,\r\n"
         "          'mvavg' to apply moving average (150 elements),\r\n"
         "          'noise' to apply random spike noise (75% prob),\r\n"
+        "          'thr <val>' to set warning threshold (1..4094),\r\n"
         "          'run'   to enter Listening mode\r\n\n";
     HAL_UART_Transmit(&huart2, (const uint8_t *)banner, strlen(banner), 200);
 }
@@ -318,10 +331,10 @@ void state_listening_fn(void *data) {
 
     if (diff <= 0) {
         ext_duty = 0U;
-    } else if ((uint32_t)diff >= FSM_DIFF_THRESHOLD) {
+    } else if ((uint32_t)diff >= warn_diff_threshold) {
         ext_duty = FSM_PWM_MAX_DUTY;
     } else {
-        ext_duty = (uint16_t)(((uint32_t)diff * FSM_PWM_MAX_DUTY) / FSM_DIFF_THRESHOLD);
+        ext_duty = (uint16_t)(((uint32_t)diff * FSM_PWM_MAX_DUTY) / warn_diff_threshold);
     }
 
     /*!< Board LED: 200ms period, 80% duty cycle (160ms ON, 40ms OFF) */
@@ -329,7 +342,7 @@ void state_listening_fn(void *data) {
     update_leds_pwm(board_duty, ext_duty);
 
     /*!< Check if (NTC - POT) > threshold for 5 seconds */
-    if (diff > (int32_t)FSM_DIFF_THRESHOLD) {
+    if (diff > (int32_t)warn_diff_threshold) {
         if (!threshold_active) {
             threshold_active = 1;
             threshold_start_tick = ctx->tick_ms;
